@@ -1,0 +1,467 @@
+// Rudraksh Capital — Prisma Schema
+// Microfinance / NBFC Software
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== AUTH & USERS ====================
+
+enum Role {
+  SUPER_ADMIN
+  BRANCH_MANAGER
+  CASHIER
+  ADVISOR
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  name      String
+  role      Role     @default(CASHIER)
+  branch    Branch?  @relation(fields: [branchId], references: [id])
+  branchId  String?
+  isBlocked Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+// ==================== MASTERS ====================
+
+model Branch {
+  id        String     @id @default(cuid())
+  name      String
+  code      String     @unique
+  address   String?
+  phone     String?
+  email     String?
+  isActive  Boolean    @default(true)
+  users     User[]
+  customers Customer[]
+  advisors  Advisor[]
+  loans     Loan[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("branches")
+}
+
+model Rank {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  level    Int       @default(0)
+  isActive Boolean   @default(true)
+  advisors Advisor[]
+
+  @@map("ranks")
+}
+
+model CommissionPlan {
+  id         String         @id @default(cuid())
+  name       String
+  type       CommissionType
+  value      Decimal        @db.Decimal(10, 2)
+  conditions Json?
+  isActive   Boolean        @default(true)
+  advisors   Advisor[]
+  createdAt  DateTime       @default(now())
+
+  @@map("commission_plans")
+}
+
+enum CommissionType {
+  PERCENTAGE
+  FLAT
+}
+
+model RelationMaster {
+  id   String @id @default(cuid())
+  name String @unique
+
+  @@map("relation_masters")
+}
+
+model BankMaster {
+  id       String  @id @default(cuid())
+  name     String
+  branch   String?
+  ifsc     String?
+  account  String?
+  isActive Boolean @default(true)
+
+  @@map("bank_masters")
+}
+
+model AccountMaster {
+  id       String  @id @default(cuid())
+  name     String
+  type     String  // Asset, Liability, Income, Expense
+  parentId String?
+  isActive Boolean @default(true)
+
+  @@map("account_masters")
+}
+
+model LoanProduct {
+  id           String       @id @default(cuid())
+  name         String
+  code         String       @unique
+  interestRate Decimal      @db.Decimal(5, 2)
+  interestType InterestType
+  minAmount    Decimal      @db.Decimal(12, 2)
+  maxAmount    Decimal      @db.Decimal(12, 2)
+  minTenure    Int
+  maxTenure    Int
+  processingFee Decimal?    @db.Decimal(10, 2)
+  isActive     Boolean      @default(true)
+  loans        Loan[]
+  createdAt    DateTime     @default(now())
+
+  @@map("loan_products")
+}
+
+enum InterestType {
+  FLAT
+  REDUCING
+  MONTHLY
+}
+
+model InterestMaster {
+  id       String  @id @default(cuid())
+  name     String
+  rate     Decimal @db.Decimal(5, 2)
+  type     String  // yearly, monthly, daily
+  isActive Boolean @default(true)
+
+  @@map("interest_masters")
+}
+
+model FinancialYear {
+  id        String   @id @default(cuid())
+  name      String   @unique // "2025-26"
+  startDate DateTime
+  endDate   DateTime
+  isCurrent Boolean  @default(false)
+
+  @@map("financial_years")
+}
+
+model ConfigMaster {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+  label String?
+
+  @@map("config_masters")
+}
+
+model VoucherMaster {
+  id       String  @id @default(cuid())
+  name     String
+  prefix   String  @unique
+  lastNo   Int     @default(0)
+  isActive Boolean @default(true)
+
+  @@map("voucher_masters")
+}
+
+// ==================== CUSTOMER ====================
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+model Customer {
+  id           String    @id @default(cuid())
+  customerId   String    @unique // Auto: RC-0001
+  branch       Branch    @relation(fields: [branchId], references: [id])
+  branchId     String
+  name         String
+  fatherName   String?
+  motherName   String?
+  spouseName   String?
+  phone        String
+  altPhone     String?
+  email        String?
+  dob          DateTime?
+  gender       Gender?
+  address      String
+  city         String?
+  district     String?
+  state        String?
+  pincode      String?
+  aadhaarNo    String?
+  panNo        String?
+  photo        String?   // file path
+  signature    String?   // file path
+  kycDocs      Json?     // [{name, path, type}]
+  nominee      String?
+  nomineeRel   String?
+  nomineePhone String?
+  shareAmount  Decimal?  @db.Decimal(12, 2) @default(0)
+  isActive     Boolean   @default(true)
+  loans        Loan[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([branchId])
+  @@index([phone])
+  @@index([name])
+  @@map("customers")
+}
+
+// ==================== ADVISOR ====================
+
+model Advisor {
+  id             String          @id @default(cuid())
+  advisorId      String          @unique // Auto: ADV-0001
+  branch         Branch          @relation(fields: [branchId], references: [id])
+  branchId       String
+  name           String
+  fatherName     String?
+  phone          String
+  altPhone       String?
+  email          String?
+  address        String?
+  city           String?
+  state          String?
+  pincode        String?
+  aadhaarNo      String?
+  panNo          String?
+  photo          String?
+  rank           Rank?           @relation(fields: [rankId], references: [id])
+  rankId         String?
+  commissionPlan CommissionPlan? @relation(fields: [commPlanId], references: [id])
+  commPlanId     String?
+  upline         Advisor?        @relation("DownLine", fields: [uplineId], references: [id])
+  uplineId       String?
+  downline       Advisor[]       @relation("DownLine")
+  isActive       Boolean         @default(true)
+  loans          Loan[]
+  joiningDate    DateTime        @default(now())
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([branchId])
+  @@index([phone])
+  @@map("advisors")
+}
+
+// ==================== LOAN ====================
+
+enum LoanStatus {
+  APPLIED
+  APPROVED
+  REJECTED
+  DISBURSED
+  ACTIVE
+  CLOSED
+  DEFAULTED
+}
+
+model Loan {
+  id              String        @id @default(cuid())
+  loanNo          String        @unique // Auto: LN-202504-0001
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  customerId      String
+  advisor         Advisor?      @relation(fields: [advisorId], references: [id])
+  advisorId       String?
+  branch          Branch        @relation(fields: [branchId], references: [id])
+  branchId        String
+  loanProduct     LoanProduct   @relation(fields: [loanProductId], references: [id])
+  loanProductId   String
+  amount          Decimal       @db.Decimal(12, 2)
+  interestRate    Decimal       @db.Decimal(5, 2)
+  interestType    InterestType
+  tenure          Int           // months
+  emiAmount       Decimal?      @db.Decimal(12, 2)
+  totalInterest   Decimal?      @db.Decimal(12, 2)
+  totalPayable    Decimal?      @db.Decimal(12, 2)
+  processingFee   Decimal?      @db.Decimal(10, 2)
+  status          LoanStatus    @default(APPLIED)
+  purpose         String?
+  guarantorName   String?
+  guarantorPhone  String?
+  guarantorAddr   String?
+  appliedDate     DateTime      @default(now())
+  approvedDate    DateTime?
+  approvedBy      String?
+  disbursedDate   DateTime?
+  disbursedBy     String?
+  disbursedBank   String?
+  disbursedAccNo  String?
+  rejectedDate    DateTime?
+  rejectionReason String?
+  closedDate      DateTime?
+  remarks         String?
+  emiSchedules    EmiSchedule[]
+  payments        Payment[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([branchId])
+  @@index([customerId])
+  @@index([status])
+  @@index([loanNo])
+  @@map("loans")
+}
+
+// ==================== EMI SCHEDULE ====================
+
+enum EmiStatus {
+  PENDING
+  PAID
+  PARTIAL
+  OVERDUE
+}
+
+model EmiSchedule {
+  id          String    @id @default(cuid())
+  loan        Loan      @relation(fields: [loanId], references: [id])
+  loanId      String
+  installment Int
+  dueDate     DateTime
+  amount      Decimal   @db.Decimal(12, 2)
+  principal   Decimal   @db.Decimal(12, 2)
+  interest    Decimal   @db.Decimal(12, 2)
+  penalty     Decimal   @default(0) @db.Decimal(12, 2)
+  paidAmount  Decimal   @default(0) @db.Decimal(12, 2)
+  paidDate    DateTime?
+  status      EmiStatus @default(PENDING)
+
+  @@unique([loanId, installment])
+  @@index([dueDate])
+  @@index([status])
+  @@map("emi_schedules")
+}
+
+// ==================== PAYMENTS ====================
+
+enum PaymentType {
+  EMI
+  NON_EMI
+  PART_PAYMENT
+  COMMISSION
+  GENERAL
+  EXPENDITURE
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  UPI
+  OTHER
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  receiptNo   String        @unique
+  loan        Loan?         @relation(fields: [loanId], references: [id])
+  loanId      String?
+  type        PaymentType
+  method      PaymentMethod @default(CASH)
+  amount      Decimal       @db.Decimal(12, 2)
+  narration   String?
+  chequeNo    String?
+  chequeDate  DateTime?
+  bankName    String?
+  collectedBy String
+  branchId    String
+  createdAt   DateTime      @default(now())
+
+  @@index([branchId])
+  @@index([createdAt])
+  @@map("payments")
+}
+
+// ==================== VOUCHERS ====================
+
+enum VoucherType {
+  RECEIPT
+  PAYMENT
+  JOURNAL
+  CONTRA
+}
+
+model Voucher {
+  id          String      @id @default(cuid())
+  voucherNo   String      @unique
+  type        VoucherType
+  date        DateTime    @default(now())
+  amount      Decimal     @db.Decimal(12, 2)
+  accountHead String
+  narration   String?
+  referenceNo String?
+  branchId    String
+  createdBy   String
+  approvedBy  String?
+  status      String      @default("PENDING") // PENDING, APPROVED, CANCELLED
+  createdAt   DateTime    @default(now())
+
+  @@index([branchId])
+  @@index([date])
+  @@map("vouchers")
+}
+
+// ==================== ACCOUNTS ====================
+
+model AccountEntry {
+  id          String   @id @default(cuid())
+  date        DateTime @default(now())
+  accountHead String
+  type        String   // DEBIT, CREDIT
+  amount      Decimal  @db.Decimal(12, 2)
+  narration   String?
+  referenceNo String?
+  voucherId   String?
+  branchId    String
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  @@index([branchId])
+  @@index([date])
+  @@index([accountHead])
+  @@map("account_entries")
+}
+
+// ==================== AUDIT LOG ====================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  userName  String?
+  action    String   // CREATE, UPDATE, DELETE
+  entity    String   // Customer, Loan, Payment...
+  entityId  String
+  oldData   Json?
+  newData   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ==================== COUNTERS (for auto ID generation) ====================
+
+model Counter {
+  id      String @id @default(cuid())
+  name    String @unique // "customer", "advisor", "loan", "receipt", "voucher"
+  prefix  String // "RC", "ADV", "LN", "RCP", "VCH"
+  lastNo  Int    @default(0)
+
+  @@map("counters")
+}
