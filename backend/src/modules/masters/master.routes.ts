@@ -57,5 +57,20 @@ router.use('/interest', masterCRUD('InterestMaster', prisma.interestMaster));
 router.use('/financial-years', masterCRUD('FinancialYear', prisma.financialYear));
 router.use('/config', masterCRUD('ConfigMaster', prisma.configMaster));
 router.use('/voucher-types', masterCRUD('VoucherMaster', prisma.voucherMaster));
+router.use('/gold-categories', masterCRUD('GoldCategory', prisma.goldCategory));
+
+// Special: Set current financial year
+router.patch('/financial-years/:id/set-current', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Reset all financial years
+    await prisma.financialYear.updateMany({ data: { isCurrent: false } });
+    // Set the selected one as current
+    const fy = await prisma.financialYear.update({
+      where: { id: (req.params.id as string) },
+      data: { isCurrent: true },
+    });
+    res.json({ success: true, data: fy, message: `${fy.name} set as current financial year` });
+  } catch (e) { next(e); }
+});
 
 export default router;

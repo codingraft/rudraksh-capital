@@ -22,6 +22,13 @@ const loanSchema = z.object({
   guarantorAddr: z.string().optional(),
   remarks: z.string().optional(),
   branchId: z.string().optional(),
+  // E-Rickshaw specific fields
+  vehicleNo: z.string().optional(),
+  chassisNo: z.string().optional(),
+  motorNo: z.string().optional(),
+  batteryNo: z.string().optional(),
+  dealerName: z.string().optional(),
+  goldItems: z.any().optional(), // Array of { itemName, purity, grossWeight, netWeight }
 });
 
 // GET /api/loans
@@ -127,6 +134,13 @@ router.post('/', auditLog('Loan'), async (req: Request, res: Response, next: Nex
         guarantorName: data.guarantorName,
         guarantorPhone: data.guarantorPhone,
         guarantorAddr: data.guarantorAddr,
+        // E-Rickshaw fields
+        vehicleNo: data.vehicleNo,
+        chassisNo: data.chassisNo,
+        motorNo: data.motorNo,
+        batteryNo: data.batteryNo,
+        dealerName: data.dealerName,
+        goldItems: data.goldItems,
         remarks: data.remarks,
         status: 'APPLIED',
       } as any,
@@ -275,5 +289,30 @@ router.get('/tools/calculator', async (req: Request, res: Response, next: NextFu
     res.json({ success: true, data: result });
   } catch (error: any) { next(error); }
 });
+
+// PATCH /api/loans/emi/:id — Modify EMI installment (Super Admin only)
+router.patch('/emi/:id', authorize('SUPER_ADMIN'), auditLog('EMI'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { dueDate, amount } = req.body;
+      const existing = await prisma.emiSchedule.findUnique({ where: { id: (req.params.id as string) } });
+      if (!existing) throw new AppError('EMI not found', 404);
+      if (existing.status === 'PAID') throw new AppError('Cannot modify a paid EMI', 400);
+
+      const updated = await prisma.emiSchedule.update({
+        where: { id: (req.params.id as string) },
+        data: {
+          dueDate: dueDate ? new Date(dueDate) : existing.dueDate,
+          amount: amount !== undefined ? amount : existing.amount,
+          isModified: true,
+          modifiedBy: req.user!.name,
+          modifiedAt: new Date(),
+        } as any,
+      });
+
+      res.json({ success: true, data: updated, message: 'EMI installment updated' });
+    } catch (error: any) { next(error); }
+  }
+);
 
 export default router;

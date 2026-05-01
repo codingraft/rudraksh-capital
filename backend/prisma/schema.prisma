@@ -105,6 +105,7 @@ model AccountMaster {
   name     String
   type     String  // Asset, Liability, Income, Expense
   parentId String?
+  code     String? @unique
   isActive Boolean @default(true)
 
   @@map("account_masters")
@@ -173,6 +174,16 @@ model VoucherMaster {
   @@map("voucher_masters")
 }
 
+model GoldCategory {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  purity      String? // e.g. "22K", "24K", "18K"
+  ratePerGram Decimal @default(0) @db.Decimal(10, 2)
+  isActive    Boolean @default(true)
+
+  @@map("gold_categories")
+}
+
 // ==================== CUSTOMER ====================
 
 enum Gender {
@@ -204,11 +215,13 @@ model Customer {
   panNo        String?
   photo        String?   // file path
   signature    String?   // file path
+  thumbImpression String? // file path
   kycDocs      Json?     // [{name, path, type}]
   nominee      String?
   nomineeRel   String?
   nomineePhone String?
   shareAmount  Decimal?  @db.Decimal(12, 2) @default(0)
+  groupName    String?   // Group Create Section
   isActive     Boolean   @default(true)
   loans        Loan[]
   createdAt    DateTime  @default(now())
@@ -248,6 +261,7 @@ model Advisor {
   downline       Advisor[]       @relation("DownLine")
   isActive       Boolean         @default(true)
   loans          Loan[]
+  vouchers       Voucher[]
   joiningDate    DateTime        @default(now())
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -293,6 +307,14 @@ model Loan {
   guarantorName   String?
   guarantorPhone  String?
   guarantorAddr   String?
+  // E-Rickshaw specific fields
+  vehicleNo       String?
+  chassisNo       String?
+  motorNo         String?
+  batteryNo       String?
+  dealerName      String?
+  goldItems       Json?         // Array of gold item details for gold loans
+  // Dates and approvals
   appliedDate     DateTime      @default(now())
   approvedDate    DateTime?
   approvedBy      String?
@@ -378,10 +400,16 @@ model Payment {
   bankName    String?
   collectedBy String
   branchId    String
+  advisorId   String?
+  voucherId   String?
+  isModified  Boolean       @default(false)
+  modifiedBy  String?
+  modifiedAt  DateTime?
   createdAt   DateTime      @default(now())
 
   @@index([branchId])
   @@index([createdAt])
+  @@index([type])
   @@map("payments")
 }
 
@@ -394,23 +422,37 @@ enum VoucherType {
   CONTRA
 }
 
+enum VoucherStatus {
+  PENDING
+  APPROVED
+  PAID
+  CANCELLED
+}
+
 model Voucher {
-  id          String      @id @default(cuid())
-  voucherNo   String      @unique
+  id          String        @id @default(cuid())
+  voucherNo   String        @unique
   type        VoucherType
-  date        DateTime    @default(now())
-  amount      Decimal     @db.Decimal(12, 2)
+  date        DateTime      @default(now())
+  amount      Decimal       @db.Decimal(12, 2)
   accountHead String
   narration   String?
   referenceNo String?
   branchId    String
   createdBy   String
   approvedBy  String?
-  status      String      @default("PENDING") // PENDING, APPROVED, CANCELLED
-  createdAt   DateTime    @default(now())
+  approvedAt  DateTime?
+  paidAt      DateTime?
+  paidBy      String?
+  advisor     Advisor?      @relation(fields: [advisorId], references: [id])
+  advisorId   String?
+  status      VoucherStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
 
   @@index([branchId])
   @@index([date])
+  @@index([advisorId])
+  @@index([status])
   @@map("vouchers")
 }
 
@@ -435,6 +477,66 @@ model AccountEntry {
   @@map("account_entries")
 }
 
+model Expenditure {
+  id          String   @id @default(cuid())
+  date        DateTime @default(now())
+  accountHead String
+  amount      Decimal  @db.Decimal(12, 2)
+  narration   String?
+  status      String   @default("REQUISITION") // REQUISITION, APPROVED, REJECTED, PAID
+  requestedBy String
+  approvedBy  String?
+  approvedAt  DateTime?
+  paidBy      String?
+  paidAt      DateTime?
+  paidMethod  String?  // CASH, BANK
+  voucherNo   String?
+  branchId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([branchId])
+  @@index([status])
+  @@index([date])
+  @@map("expenditures")
+}
+
+model IncomeEntry {
+  id          String   @id @default(cuid())
+  date        DateTime @default(now())
+  accountHead String
+  amount      Decimal  @db.Decimal(12, 2)
+  narration   String?
+  method      String   @default("CASH") // CASH, BANK
+  referenceNo String?
+  branchId    String
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  @@index([branchId])
+  @@index([date])
+  @@map("income_entries")
+}
+
+model BankTransaction {
+  id          String   @id @default(cuid())
+  date        DateTime @default(now())
+  bankId      String   // Reference to BankMaster
+  bankName    String
+  type        String   // DEPOSIT, WITHDRAWAL
+  amount      Decimal  @db.Decimal(12, 2)
+  narration   String?
+  referenceNo String?
+  branchId    String
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  @@index([branchId])
+  @@index([date])
+  @@index([bankId])
+  @@map("bank_transactions")
+}
+
 // ==================== AUDIT LOG ====================
 
 model AuditLog {
@@ -442,7 +544,7 @@ model AuditLog {
   userId    String
   userName  String?
   action    String   // CREATE, UPDATE, DELETE
-  entity    String   // Customer, Loan, Payment...
+  entity    String   // Customer, Loan, Payment..
   entityId  String
   oldData   Json?
   newData   Json?

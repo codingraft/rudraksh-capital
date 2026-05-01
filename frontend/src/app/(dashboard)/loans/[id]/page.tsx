@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Card, Descriptions, Tag, Skeleton, message, Table, Button, Space, Popconfirm, Row, Col, Statistic, theme } from 'antd';
-import { BankOutlined, CheckCircleOutlined, PlayCircleOutlined, DollarOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Skeleton, message, Table, Button, Space, Popconfirm, Row, Col, Statistic, theme, Modal, Form, DatePicker, InputNumber } from 'antd';
+import { BankOutlined, CheckCircleOutlined, PlayCircleOutlined, DollarOutlined, EditOutlined, HistoryOutlined } from '@ant-design/icons';
 import { api } from '@/lib/api';
 import CollectEmiModal from '@/components/ui/CollectEmiModal';
 import { useAuthStore } from '@/store/authStore';
-
 import { useParams } from 'next/navigation';
+import dayjs from 'dayjs';
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: 'orange', PAID: 'green', PARTIAL: 'blue', OVERDUE: 'red',
@@ -20,6 +20,8 @@ export default function LoanLedgerPage() {
   const [loading, setLoading] = useState(true);
   const [emiModalOpen, setEmiModalOpen] = useState(false);
   const [selectedEmi, setSelectedEmi] = useState<any>(null);
+  const [modModalOpen, setModModalOpen] = useState(false);
+  const [modForm] = Form.useForm();
   const [errorMsg, setErrorMsg] = useState('');
   const user = useAuthStore((s) => s.user);
 
@@ -46,25 +48,50 @@ export default function LoanLedgerPage() {
     } catch (err: any) { message.error(err.response?.data?.message || 'Action failed'); }
   };
 
+  const handleModifyEmi = async () => {
+    try {
+      const values = await modForm.validateFields();
+      await api.patch(`/loans/emi/${selectedEmi.id}`, values);
+      message.success('EMI installment updated');
+      setModModalOpen(false);
+      fetchLoan();
+    } catch (err: any) { message.error(err.response?.data?.message || 'Update failed'); }
+  };
+
   if (loading) return <Skeleton active paragraph={{ rows: 12 }} />;
   if (!loan) return <div>Loan not found for ID: {id}. Error: {errorMsg}</div>;
 
   const canApprove = loan.status === 'APPLIED' && ['SUPER_ADMIN', 'BRANCH_MANAGER'].includes(user?.role || '');
   const canDisburse = loan.status === 'APPROVED' && ['SUPER_ADMIN', 'BRANCH_MANAGER'].includes(user?.role || '');
+  const canModify = ['SUPER_ADMIN'].includes(user?.role || '');
 
   const emiColumns = [
     { title: '#', dataIndex: 'installment', width: 50 },
-    { title: 'Due Date', dataIndex: 'dueDate', render: (v: string) => new Date(v).toLocaleDateString() },
+    { title: 'Due Date', dataIndex: 'dueDate', render: (v: string) => dayjs(v).format('DD/MM/YYYY') },
     { title: 'EMI', dataIndex: 'amount', render: (v: number) => `₹${Number(v).toLocaleString('en-IN')}` },
     { title: 'Principal', dataIndex: 'principal', render: (v: number) => `₹${Number(v).toLocaleString('en-IN')}` },
     { title: 'Interest', dataIndex: 'interest', render: (v: number) => `₹${Number(v).toLocaleString('en-IN')}` },
     { title: 'Paid', dataIndex: 'paidAmount', render: (v: number) => `₹${Number(v).toLocaleString('en-IN')}` },
-    { title: 'Status', dataIndex: 'status', width: 90, render: (s: string) => <Tag color={STATUS_COLORS[s]}>{s}</Tag> },
+    { title: 'Status', dataIndex: 'status', width: 90, render: (s: string, r: any) => (
+      <Space>
+        <Tag color={STATUS_COLORS[s]}>{s}</Tag>
+        {r.isModified && <Tag color="warning" icon={<HistoryOutlined />} title="Modified">MOD</Tag>}
+      </Space>
+    )},
     {
-      title: '', key: 'a', width: 80, render: (_: any, r: any) => (
-        ['DISBURSED', 'ACTIVE'].includes(loan.status) && r.status !== 'PAID' ? (
-          <Button size="small" type="primary" onClick={() => { setSelectedEmi(r); setEmiModalOpen(true); }}>Collect</Button>
-        ) : null
+      title: 'Action', key: 'a', width: 140, render: (_: any, r: any) => (
+        <Space size="small">
+          {['DISBURSED', 'ACTIVE'].includes(loan.status) && r.status !== 'PAID' && (
+            <Button size="small" type="primary" onClick={() => { setSelectedEmi(r); setEmiModalOpen(true); }}>Collect</Button>
+          )}
+          {canModify && r.status !== 'PAID' && (
+            <Button size="small" icon={<EditOutlined />} onClick={() => { 
+              setSelectedEmi(r); 
+              modForm.setFieldsValue({ dueDate: dayjs(r.dueDate), amount: r.amount });
+              setModModalOpen(true); 
+            }} />
+          )}
+        </Space>
       ),
     },
   ];
@@ -123,6 +150,7 @@ export default function LoanLedgerPage() {
         />
       </Card>
 
+      {/* Modal: Collect EMI */}
       <CollectEmiModal
         open={emiModalOpen}
         onCancel={() => setEmiModalOpen(false)}
@@ -130,6 +158,17 @@ export default function LoanLedgerPage() {
         loanId={loan.id}
         emiRecord={selectedEmi}
       />
+
+      {/* Modal: Modify EMI (Admin Only) */}
+      <Modal title="Modify EMI Installment" open={modModalOpen} onCancel={() => setModModalOpen(false)} onOk={handleModifyEmi} okText="Update">
+        <Form form={modForm} layout="vertical">
+          <Form.Item name="dueDate" label="Due Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="amount" label="EMI Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix="₹" /></Form.Item>
+          <div style={{ color: '#EF4444', fontSize: 12, marginTop: 10 }}>
+            * Note: Modifying an EMI will be logged in the audit trail.
+          </div>
+        </Form>
+      </Modal>
     </div>
   );
 }
