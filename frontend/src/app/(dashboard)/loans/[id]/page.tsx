@@ -22,6 +22,11 @@ export default function LoanLedgerPage() {
   const [selectedEmi, setSelectedEmi] = useState<any>(null);
   const [modModalOpen, setModModalOpen] = useState(false);
   const [modForm] = Form.useForm();
+  
+  // Part payment states
+  const [partModalOpen, setPartModalOpen] = useState(false);
+  const [partForm] = Form.useForm();
+  
   const [errorMsg, setErrorMsg] = useState('');
   const user = useAuthStore((s) => s.user);
 
@@ -58,12 +63,29 @@ export default function LoanLedgerPage() {
     } catch (err: any) { message.error(err.response?.data?.message || 'Update failed'); }
   };
 
+  const handlePartPayment = async () => {
+    try {
+      const values = await partForm.validateFields();
+      await api.post('/payments/part-payment', { 
+        loanId: id, 
+        amount: values.amount, 
+        method: values.method || 'CASH',
+        narration: values.narration 
+      });
+      message.success('Part payment processed and remaining schedule recalculated');
+      setPartModalOpen(false);
+      partForm.resetFields();
+      fetchLoan();
+    } catch (err: any) { message.error(err.response?.data?.message || 'Part payment failed'); }
+  };
+
   if (loading) return <Skeleton active paragraph={{ rows: 12 }} />;
   if (!loan) return <div>Loan not found for ID: {id}. Error: {errorMsg}</div>;
 
   const canApprove = loan.status === 'APPLIED' && ['SUPER_ADMIN', 'BRANCH_MANAGER'].includes(user?.role || '');
   const canDisburse = loan.status === 'APPROVED' && ['SUPER_ADMIN', 'BRANCH_MANAGER'].includes(user?.role || '');
   const canModify = ['SUPER_ADMIN'].includes(user?.role || '');
+  const canPartPayment = ['DISBURSED', 'ACTIVE'].includes(loan.status);
 
   const emiColumns = [
     { title: '#', dataIndex: 'installment', width: 50 },
@@ -125,6 +147,11 @@ export default function LoanLedgerPage() {
               <Button type="primary" style={{ background: '#10B981', border: 'none' }} icon={<PlayCircleOutlined />}>Disburse</Button>
             </Popconfirm>
           )}
+          {canPartPayment && (
+            <Button type="primary" onClick={() => setPartModalOpen(true)} icon={<DollarOutlined />} style={{ background: '#F59E0B', border: 'none' }}>
+              Part Payment
+            </Button>
+          )}
         </Space>
       </div>
 
@@ -166,6 +193,30 @@ export default function LoanLedgerPage() {
           <Form.Item name="amount" label="EMI Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix="₹" /></Form.Item>
           <div style={{ color: '#EF4444', fontSize: 12, marginTop: 10 }}>
             * Note: Modifying an EMI will be logged in the audit trail.
+          </div>
+        </Form>
+      </Modal>
+
+      {/* Modal: Part Payment */}
+      <Modal title="Make Part Payment" open={partModalOpen} onCancel={() => setPartModalOpen(false)} onOk={handlePartPayment} okText="Process Payment">
+        <Form form={partForm} layout="vertical" initialValues={{ method: 'CASH' }}>
+          <Form.Item name="amount" label="Part Payment Amount to reduce Principal" rules={[{ required: true }]}>
+            <InputNumber style={{ width: '100%' }} prefix="₹" min={1} />
+          </Form.Item>
+          <Form.Item name="method" label="Payment Method" rules={[{ required: true }]}>
+            <Form.Item name="method" noStyle>
+              <select className="ant-input">
+                <option value="CASH">Cash</option>
+                <option value="UPI">UPI</option>
+                <option value="BANK_TRANSFER">Bank Transfer</option>
+              </select>
+            </Form.Item>
+          </Form.Item>
+          <Form.Item name="narration" label="Narration / Reference No">
+            <input className="ant-input" />
+          </Form.Item>
+          <div style={{ color: '#F59E0B', fontSize: 13, marginTop: 10 }}>
+            * Part payments are directly deducted from the remaining principal. It will reduce your remaining tenure from the end without changing the standard EMI amount.
           </div>
         </Form>
       </Modal>

@@ -33,6 +33,7 @@ function getPrefix(name: string): string {
     loan: 'LN',
     receipt: 'RCP',
     voucher: 'VCH',
+    group: 'GRP',
   };
   return prefixes[name] || name.toUpperCase().slice(0, 3);
 }

@@ -13,6 +13,7 @@ import { notFoundHandler, errorHandler } from './middleware/errorHandler';
 import authRoutes from './modules/auth/auth.routes';
 import masterRoutes from './modules/masters/master.routes';
 import customerRoutes from './modules/customers/customer.routes';
+import groupRoutes from './modules/customers/group.routes';
 import advisorRoutes from './modules/advisors/advisor.routes';
 import loanRoutes from './modules/loans/loan.routes';
 import paymentRoutes from './modules/payments/payment.routes';
@@ -65,6 +66,7 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/masters', masterRoutes);
 app.use('/api/customers', customerRoutes);
+app.use('/api/groups', groupRoutes);
 app.use('/api/advisors', advisorRoutes);
 app.use('/api/loans', loanRoutes);
 app.use('/api/payments', paymentRoutes);

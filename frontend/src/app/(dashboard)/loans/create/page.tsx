@@ -70,7 +70,7 @@ export default function LoanCreatePage() {
       <Card variant="borderless" style={{ borderRadius: 16, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
         <Form form={form} layout="vertical" onFinish={onFinish} requiredMark="optional">
           {/* Applicant Section */}
-          <Divider orientation="left" plain><Text strong style={{ color: '#6366F1' }}>APPLICANT INFORMATION</Text></Divider>
+          <Divider plain><Text strong style={{ color: '#6366F1' }}>APPLICANT INFORMATION</Text></Divider>
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="customerId" label="Customer" rules={[{ required: true }]}>
@@ -87,7 +87,7 @@ export default function LoanCreatePage() {
           </Row>
 
           {/* Loan Basic Section */}
-          <Divider orientation="left" plain><Text strong style={{ color: '#6366F1' }}>LOAN SPECIFICATIONS</Text></Divider>
+          <Divider plain><Text strong style={{ color: '#6366F1' }}>LOAN SPECIFICATIONS</Text></Divider>
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item name="loanProductId" label="Product" rules={[{ required: true }]}>
@@ -130,7 +130,7 @@ export default function LoanCreatePage() {
           {/* Dynamic Gold Details Section */}
           {isGoldLoan && (
             <>
-              <Divider orientation="left" plain><Text strong style={{ color: '#F59E0B' }}>GOLD COLLATERAL DETAILS</Text></Divider>
+              <Divider plain><Text strong style={{ color: '#F59E0B' }}>GOLD COLLATERAL DETAILS</Text></Divider>
               <div style={{ background: '#FFFBEB', padding: '16px', borderRadius: '12px', marginBottom: '16px' }}>
                 <Form.List name="goldItems">
                   {(fields, { add, remove }) => (
@@ -165,7 +165,7 @@ export default function LoanCreatePage() {
           {/* Dynamic E-Rickshaw Details Section */}
           {isVehicleLoan && (
             <>
-              <Divider orientation="left" plain><Text strong style={{ color: '#06B6D4' }}>VEHICLE DETAILS</Text></Divider>
+              <Divider plain><Text strong style={{ color: '#06B6D4' }}>VEHICLE DETAILS</Text></Divider>
               <div style={{ background: '#ECFEFF', padding: '16px', borderRadius: '12px', marginBottom: '16px' }}>
                 <Row gutter={12}>
                   <Col span={8}>
@@ -191,7 +191,7 @@ export default function LoanCreatePage() {
           )}
 
           {/* Guarantor Section */}
-          <Divider orientation="left" plain><Text strong style={{ color: '#6366F1' }}>GUARANTOR DETAILS</Text></Divider>
+          <Divider plain><Text strong style={{ color: '#6366F1' }}>GUARANTOR DETAILS</Text></Divider>
           <Row gutter={16}>
             <Col span={12}><Form.Item name="guarantorName" label="Guarantor Name"><Input /></Form.Item></Col>
             <Col span={12}><Form.Item name="guarantorPhone" label="Guarantor Phone"><Input /></Form.Item></Col>

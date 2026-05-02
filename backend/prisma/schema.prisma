@@ -46,6 +46,7 @@ model Branch {
   isActive  Boolean    @default(true)
   users     User[]
   customers Customer[]
+  customerGroups CustomerGroup[]
   advisors  Advisor[]
   loans     Loan[]
   createdAt DateTime   @default(now())
@@ -221,7 +222,9 @@ model Customer {
   nomineeRel   String?
   nomineePhone String?
   shareAmount  Decimal?  @db.Decimal(12, 2) @default(0)
-  groupName    String?   // Group Create Section
+  groupId      String?   // Relation to CustomerGroup
+  group        CustomerGroup? @relation(fields: [groupId], references: [id])
+  groupName    String?   // Legacy/Custom Group Name
   isActive     Boolean   @default(true)
   loans        Loan[]
   createdAt    DateTime  @default(now())
@@ -231,6 +234,22 @@ model Customer {
   @@index([phone])
   @@index([name])
   @@map("customers")
+}
+
+model CustomerGroup {
+  id         String     @id @default(cuid())
+  groupId    String     @unique // Auto: GRP-0001
+  name       String
+  branchId   String
+  branch     Branch     @relation(fields: [branchId], references: [id])
+  leaderId   String?    @unique // One Customer is the leader
+  members    Customer[]
+  isActive   Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([branchId])
+  @@map("customer_groups")
 }
 
 // ==================== ADVISOR ====================

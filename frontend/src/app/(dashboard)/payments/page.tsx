@@ -193,7 +193,7 @@ export default function PaymentsPage() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const handlePrint = useReactToPrint({
-    content: () => printRef.current,
+    contentRef: printRef,
     documentTitle: `Receipt-${selectedPayment?.receiptNo || 'Unknown'}`,
   });
 

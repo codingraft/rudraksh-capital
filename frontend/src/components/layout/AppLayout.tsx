@@ -8,7 +8,7 @@ import {
   LogoutOutlined, SunOutlined, MoonOutlined, BellOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, SearchOutlined,
   SafetyOutlined, BarChartOutlined, WalletOutlined,
-  BookOutlined, AuditOutlined, FundOutlined,
+  BookOutlined, AuditOutlined, FundOutlined, CalculatorOutlined
 } from '@ant-design/icons';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
@@ -29,6 +29,7 @@ const NAV_GROUPS = [
     label: 'Management',
     items: [
       { key: '/customers', icon: <TeamOutlined />, label: 'Customers' },
+      { key: '/groups', icon: <TeamOutlined />, label: 'Customer Groups' },
       { key: '/advisors', icon: <UserOutlined />, label: 'Advisors' },
       { key: '/loans', icon: <BankOutlined />, label: 'Loans' },
       { key: '/payments', icon: <DollarOutlined />, label: 'Payments' },
@@ -39,6 +40,12 @@ const NAV_GROUPS = [
     items: [
       { key: '/vouchers', icon: <FileTextOutlined />, label: 'Vouchers' },
       { key: '/accounts', icon: <WalletOutlined />, label: 'Accounts' },
+    ],
+  },
+  {
+    label: 'Tools',
+    items: [
+      { key: '/calculator', icon: <CalculatorOutlined />, label: 'Loan Calculator' },
     ],
   },
   {

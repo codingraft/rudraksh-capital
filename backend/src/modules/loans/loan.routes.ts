@@ -285,7 +285,27 @@ router.get('/tools/calculator', async (req: Request, res: Response, next: NextFu
 
     if (!amount || !rate || !tenure) throw new AppError('amount, rate, and tenure are required', 400);
 
-    const result = calculateEMI(amount, rate, tenure, type);
+    const calcResult = calculateEMI(amount, rate, tenure, type);
+    const schedule = generateEMISchedule(amount, rate, tenure, type, new Date());
+    
+    // Format schedule for frontend
+    let balance = amount;
+    const formattedSchedule = schedule.map(s => {
+      balance = Math.max(0, balance - s.principal);
+      return {
+        ...s,
+        installmentNo: s.installment,
+        balance: Math.round(balance * 100) / 100
+      };
+    });
+
+    const result = {
+      emi: calcResult.emiAmount,
+      totalInterest: calcResult.totalInterest,
+      totalAmount: calcResult.totalPayable,
+      schedule: formattedSchedule
+    };
+
     res.json({ success: true, data: result });
   } catch (error: any) { next(error); }
 });

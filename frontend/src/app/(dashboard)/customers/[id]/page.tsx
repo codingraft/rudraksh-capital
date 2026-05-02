@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Card, Descriptions, Tabs, Tag, Skeleton, message, Table, theme, Row, Col, Statistic } from 'antd';
-import { UserOutlined, BankOutlined, DollarOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tabs, Tag, Skeleton, message, Table, theme, Row, Col, Statistic, Upload, Button } from 'antd';
+import { UserOutlined, BankOutlined, DollarOutlined, UploadOutlined, FileImageOutlined } from '@ant-design/icons';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 
@@ -14,6 +14,27 @@ export default function CustomerDetailPage() {
   const { token: { colorBgContainer, colorBorder } } = theme.useToken();
 
   const [errorMsg, setErrorMsg] = useState('');
+
+  const handleThumbUpload = async (file: File) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        try {
+          const res = await api.patch(`/customers/${id}`, { thumbImpression: reader.result as string });
+          if (res.data.success) {
+            message.success('Thumb impression updated successfully!');
+            setCustomer({ ...customer, thumbImpression: reader.result });
+            resolve(true);
+          }
+        } catch (err: any) {
+          message.error(err.response?.data?.message || 'Failed to upload thumb impression');
+          reject(err);
+        }
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -94,6 +115,34 @@ export default function CustomerDetailPage() {
               <Row gutter={16}>
                 <Col span={12}><Statistic title="Share Amount" value={customer.shareAmount || 0} prefix="₹" /></Col>
                 <Col span={12}><Statistic title="Member Since" value={new Date(customer.createdAt).toLocaleDateString()} /></Col>
+              </Row>
+            </Card>
+          ),
+        },
+        {
+          label: 'KYC Documents', key: '4', icon: <FileImageOutlined />,
+          children: (
+            <Card variant="borderless" style={{ borderRadius: 12 }}>
+              <Row gutter={[24, 24]}>
+                <Col xs={24} md={12}>
+                  <h4>Thumb Impression</h4>
+                  <div style={{ padding: 16, border: '1px dashed #d9d9d9', borderRadius: 8, textAlign: 'center' }}>
+                    {customer.thumbImpression ? (
+                      <div style={{ marginBottom: 16 }}>
+                        <img src={customer.thumbImpression} alt="Thumb Print" style={{ maxHeight: 120, maxWidth: '100%', objectFit: 'contain' }} />
+                      </div>
+                    ) : (
+                      <div style={{ color: '#999', marginBottom: 16 }}>No thumb impression uploaded</div>
+                    )}
+                    <Upload 
+                      accept="image/*" 
+                      showUploadList={false} 
+                      beforeUpload={(file) => { handleThumbUpload(file); return false; }}
+                    >
+                      <Button icon={<UploadOutlined />}>Upload Thumb Print</Button>
+                    </Upload>
+                  </div>
+                </Col>
               </Row>
             </Card>
           ),

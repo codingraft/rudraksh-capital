@@ -120,7 +120,7 @@ export default function GlobalSearch() {
           )}
         </div>
         <div style={{ padding: '12px', background: '#fafafa', borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px', fontSize: '12px', color: '#999', textAlign: 'right' }}>
-          Press <Tag size="small">Esc</Tag> to close
+          Press <Tag>Esc</Tag> to close
         </div>
       </Modal>
 

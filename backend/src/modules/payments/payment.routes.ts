@@ -167,13 +167,56 @@ router.post('/part-payment', auditLog('Payment'), async (req: Request, res: Resp
     const { loanId, amount, method, narration } = req.body;
     if (!loanId || !amount) throw new AppError('Loan ID and amount required', 400);
 
-    const loan = await prisma.loan.findUnique({ where: { id: loanId } });
+    const loan = await prisma.loan.findUnique({ 
+      where: { id: loanId },
+      include: { emiSchedules: { orderBy: { installment: 'asc' } } }
+    });
     if (!loan) throw new AppError('Loan not found', 404);
     if (!['DISBURSED', 'ACTIVE'].includes(loan.status)) {
       throw new AppError('Loan is not active for part payment', 400);
     }
 
+    const pendingEmis = loan.emiSchedules.filter(e => e.status === 'PENDING');
+    if (pendingEmis.length === 0) throw new AppError('No pending EMIs left to deduct from', 400);
+
+    const remainingPrincipal = pendingEmis.reduce((sum, e) => sum + Number(e.principal), 0);
+    if (amount >= remainingPrincipal) throw new AppError('Part payment exceeds or equals remaining principal. Use foreclosure instead.', 400);
+
     const receiptNo = await generateId('receipt');
+    
+    // We apply part payment by reducing principal starting from the last EMIs (Tenure Reduction Method)
+    let leftToReduce = amount;
+    const updates: any[] = [];
+    
+    for (let i = pendingEmis.length - 1; i >= 0; i--) {
+      const emi = pendingEmis[i];
+      const pAmt = Number(emi.principal);
+      
+      if (leftToReduce <= 0) break;
+      
+      if (leftToReduce >= pAmt) {
+        // This EMI principal is fully paid off by part payment
+        leftToReduce -= pAmt;
+        updates.push(prisma.emiSchedule.update({
+          where: { id: emi.id },
+          data: { principal: 0, interest: 0, amount: 0, status: 'PAID', paidAmount: 0 } // Cancelled by advance
+        }));
+      } else {
+        // Partially reduces this EMI
+        const newPrincipal = pAmt - leftToReduce;
+        // Keep interest same (simple flat logic) or proportional. Let's keep interest same for now, just reduce amount.
+        const newAmount = newPrincipal + Number(emi.interest);
+        updates.push(prisma.emiSchedule.update({
+          where: { id: emi.id },
+          data: { 
+            principal: newPrincipal, 
+            amount: newAmount
+          }
+        }));
+        leftToReduce = 0;
+      }
+    }
+
     const payment = await prisma.payment.create({
       data: {
         receiptNo,
@@ -186,8 +229,11 @@ router.post('/part-payment', auditLog('Payment'), async (req: Request, res: Resp
         branchId: req.user!.branchId || loan.branchId,
       } as any,
     });
+    
+    // Process all EMI updates
+    await prisma.$transaction(updates);
 
-    res.status(201).json({ success: true, data: payment, message: `Part payment of ₹${amount} collected. Receipt: ${receiptNo}` });
+    res.status(201).json({ success: true, data: payment, message: `Part payment of ₹${amount} collected. Remaining tenure reduced. Receipt: ${receiptNo}` });
   } catch (error: any) { next(error); }
 });
 
