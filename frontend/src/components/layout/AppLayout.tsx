@@ -7,11 +7,13 @@ import {
   DollarOutlined, FileTextOutlined, SettingOutlined,
   LogoutOutlined, SunOutlined, MoonOutlined, BellOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, SearchOutlined,
-  SafetyOutlined, BarChartOutlined,
+  SafetyOutlined, BarChartOutlined, WalletOutlined,
+  BookOutlined, AuditOutlined, FundOutlined,
 } from '@ant-design/icons';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
+import GlobalSearch from '../ui/GlobalSearch';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -36,6 +38,13 @@ const NAV_GROUPS = [
     label: 'Finance',
     items: [
       { key: '/vouchers', icon: <FileTextOutlined />, label: 'Vouchers' },
+      { key: '/accounts', icon: <WalletOutlined />, label: 'Accounts' },
+    ],
+  },
+  {
+    label: 'Analytics',
+    items: [
+      { key: '/reports', icon: <BarChartOutlined />, label: 'Reports' },
     ],
   },
   {
@@ -264,6 +273,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             )}
           </div>
+          
+          {/* Middle: Global Search */}
+          {!mobile && (
+            <div style={{ flex: 1, maxWidth: 400, margin: '0 40px' }}>
+              <GlobalSearch />
+            </div>
+          )}
 
           {/* Right: Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

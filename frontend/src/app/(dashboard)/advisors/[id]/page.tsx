@@ -71,7 +71,7 @@ export default function AdvisorDetailPage() {
         </Col>
         <Col xs={24} sm={8}>
           <Card variant="borderless" className="stat-card" style={{ borderRadius: 12 }}>
-            <Statistic title="Commission Plan" value={advisor.commissionPlan?.name || 'N/A'} prefix={<DollarOutlined />} valueStyle={{ fontSize: 16 }} />
+            <Statistic title="Commission Plan" value={advisor.commissionPlan?.name || 'N/A'} prefix={<DollarOutlined />} styles={{ content: { fontSize: 16 } }} />
           </Card>
         </Col>
       </Row>

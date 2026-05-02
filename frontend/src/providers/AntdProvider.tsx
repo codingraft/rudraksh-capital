@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ConfigProvider, theme as antdTheme } from 'antd';
+import { ConfigProvider, theme as antdTheme, App } from 'antd';
 import { useThemeStore } from '@/store/themeStore';
 
 const BRAND     = '#6366F1';
@@ -138,7 +138,9 @@ export default function AntdProvider({ children }: { children: React.ReactNode }
         },
       }}
     >
-      {children}
+      <App>
+        {children}
+      </App>
     </ConfigProvider>
   );
 }

@@ -1,10 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import prisma from '../../config/database';
-import { authenticate, branchFilter } from '../../middleware/auth';
+import { authenticate, authorize, branchFilter } from '../../middleware/auth';
 import { auditLog } from '../../middleware/auditLog';
 import { AppError } from '../../middleware/errorHandler';
-import { generateId } from '../../utils/helpers';
+import { generateId, getPagination, paginatedResponse } from '../../utils/helpers';
 
 const router = Router();
 router.use(authenticate);
@@ -81,6 +81,35 @@ router.post('/emi', auditLog('Payment'), async (req: Request, res: Response, nex
         } as any,
       });
 
+      // Auto-generate voucher for EMI collection
+      const voucherNo = await generateId('voucher');
+      await tx.voucher.create({
+        data: {
+          voucherNo,
+          type: 'RECEIPT',
+          amount: data.amount,
+          accountHead: 'EMI Collection',
+          narration: `EMI collection for ${loan.loanNo} - Receipt ${receiptNo}`,
+          branchId: req.user!.branchId || loan.branchId,
+          createdBy: req.user!.name,
+          status: 'APPROVED',
+          approvedBy: 'Auto',
+          approvedAt: new Date(),
+        },
+      });
+
+      // Create account entry
+      await tx.accountEntry.create({
+        data: {
+          accountHead: 'EMI Collection',
+          type: 'CREDIT',
+          amount: data.amount,
+          narration: `EMI payment - ${loan.loanNo} - ${receiptNo}`,
+          branchId: req.user!.branchId || loan.branchId,
+          createdBy: req.user!.name,
+        },
+      });
+
       // Update loan status to ACTIVE if first payment
       if (loan.status === 'DISBURSED') {
         await tx.loan.update({ where: { id: loan.id }, data: { status: 'ACTIVE' } });
@@ -104,6 +133,117 @@ router.post('/emi', auditLog('Payment'), async (req: Request, res: Response, nex
     });
   } catch (error: any) { next(error); }
 });
+
+// POST /api/payments/non-emi — Non-EMI payment (interest only, etc.)
+router.post('/non-emi', auditLog('Payment'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { loanId, amount, method, narration } = req.body;
+    if (!loanId || !amount) throw new AppError('Loan ID and amount required', 400);
+
+    const loan = await prisma.loan.findUnique({ where: { id: loanId } });
+    if (!loan) throw new AppError('Loan not found', 404);
+
+    const receiptNo = await generateId('receipt');
+    const payment = await prisma.payment.create({
+      data: {
+        receiptNo,
+        loanId,
+        type: 'NON_EMI',
+        method: method || 'CASH',
+        amount,
+        narration: narration || `Non-EMI payment for ${loan.loanNo}`,
+        collectedBy: req.user!.name,
+        branchId: req.user!.branchId || loan.branchId,
+      } as any,
+    });
+
+    res.status(201).json({ success: true, data: payment, message: `Non-EMI payment collected. Receipt: ${receiptNo}` });
+  } catch (error: any) { next(error); }
+});
+
+// POST /api/payments/part-payment — Part payment against principal
+router.post('/part-payment', auditLog('Payment'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { loanId, amount, method, narration } = req.body;
+    if (!loanId || !amount) throw new AppError('Loan ID and amount required', 400);
+
+    const loan = await prisma.loan.findUnique({ where: { id: loanId } });
+    if (!loan) throw new AppError('Loan not found', 404);
+    if (!['DISBURSED', 'ACTIVE'].includes(loan.status)) {
+      throw new AppError('Loan is not active for part payment', 400);
+    }
+
+    const receiptNo = await generateId('receipt');
+    const payment = await prisma.payment.create({
+      data: {
+        receiptNo,
+        loanId,
+        type: 'PART_PAYMENT',
+        method: method || 'CASH',
+        amount,
+        narration: narration || `Part payment against principal for ${loan.loanNo}`,
+        collectedBy: req.user!.name,
+        branchId: req.user!.branchId || loan.branchId,
+      } as any,
+    });
+
+    res.status(201).json({ success: true, data: payment, message: `Part payment of ₹${amount} collected. Receipt: ${receiptNo}` });
+  } catch (error: any) { next(error); }
+});
+
+// POST /api/payments/commission — Commission payment to advisor
+router.post('/commission', authorize('SUPER_ADMIN', 'BRANCH_MANAGER'), auditLog('Payment'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { advisorId, amount, method, narration, loanId } = req.body;
+      if (!advisorId || !amount) throw new AppError('Advisor ID and amount required', 400);
+
+      const advisor = await prisma.advisor.findUnique({ where: { id: advisorId } });
+      if (!advisor) throw new AppError('Advisor not found', 404);
+
+      const receiptNo = await generateId('receipt');
+      const voucherNo = await generateId('voucher');
+
+      await prisma.$transaction(async (tx: any) => {
+        // Create payment
+        await tx.payment.create({
+          data: {
+            receiptNo,
+            loanId: loanId || null,
+            type: 'COMMISSION',
+            method: method || 'CASH',
+            amount,
+            narration: narration || `Commission payment to ${advisor.name}`,
+            collectedBy: req.user!.name,
+            branchId: req.user!.branchId!,
+            advisorId,
+          },
+        });
+
+        // Create voucher
+        await tx.voucher.create({
+          data: {
+            voucherNo,
+            type: 'PAYMENT',
+            amount,
+            accountHead: 'Commission Expense',
+            narration: `Commission to ${advisor.name} (${advisor.advisorId})`,
+            branchId: req.user!.branchId!,
+            createdBy: req.user!.name,
+            advisorId,
+            status: 'PAID',
+            approvedBy: req.user!.name,
+            approvedAt: new Date(),
+            paidBy: req.user!.name,
+            paidAt: new Date(),
+          },
+        });
+      });
+
+      res.status(201).json({ success: true, message: `Commission ₹${amount} paid to ${advisor.name}. Receipt: ${receiptNo}` });
+    } catch (error: any) { next(error); }
+  }
+);
 
 // POST /api/payments/general — General payment
 router.post('/general', auditLog('Payment'), async (req: Request, res: Response, next: NextFunction) => {
@@ -129,6 +269,30 @@ router.post('/general', auditLog('Payment'), async (req: Request, res: Response,
   } catch (error: any) { next(error); }
 });
 
+// PUT /api/payments/:id — Modify payment (admin only)
+router.put('/:id', authorize('SUPER_ADMIN'), auditLog('Payment'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const existing = await prisma.payment.findUnique({ where: { id: (req.params.id as string) } });
+      if (!existing) throw new AppError('Payment not found', 404);
+
+      const updated = await prisma.payment.update({
+        where: { id: (req.params.id as string) },
+        data: {
+          amount: req.body.amount || existing.amount,
+          method: req.body.method || existing.method,
+          narration: req.body.narration || existing.narration,
+          isModified: true,
+          modifiedBy: req.user!.name,
+          modifiedAt: new Date(),
+        },
+      });
+
+      res.json({ success: true, data: updated, message: 'Payment modified' });
+    } catch (error: any) { next(error); }
+  }
+);
+
 // GET /api/payments — List payments
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -137,10 +301,23 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
     if ((req.query.type as string)) where.type = (req.query.type as string);
     if ((req.query.loanId as string)) where.loanId = (req.query.loanId as string);
+    if ((req.query.method as string)) where.method = (req.query.method as string);
+    if ((req.query.search as string)) {
+      where.OR = [
+        { receiptNo: { contains: (req.query.search as string), mode: 'insensitive' } },
+        { narration: { contains: (req.query.search as string), mode: 'insensitive' } },
+        { collectedBy: { contains: (req.query.search as string), mode: 'insensitive' } },
+      ];
+    }
     if ((req.query.date as string)) {
       const d = new Date((req.query.date as string));
       const nextD = new Date(d); nextD.setDate(nextD.getDate() + 1);
       where.createdAt = { gte: d, lt: nextD };
+    }
+    if ((req.query.fromDate as string) || (req.query.toDate as string)) {
+      where.createdAt = where.createdAt || {};
+      if ((req.query.fromDate as string)) where.createdAt.gte = new Date((req.query.fromDate as string));
+      if ((req.query.toDate as string)) where.createdAt.lte = new Date((req.query.toDate as string));
     }
 
     const payments = await prisma.payment.findMany({
@@ -149,10 +326,26 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         loan: { select: { loanNo: true, customer: { select: { name: true, customerId: true } } } },
       },
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      take: 200,
     });
 
-    res.json({ success: true, data: payments });
+    const total = payments.reduce((s, p) => s + Number(p.amount), 0);
+
+    res.json({ success: true, data: payments, summary: { total, count: payments.length } });
+  } catch (error: any) { next(error); }
+});
+
+// GET /api/payments/:id
+router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const payment = await prisma.payment.findUnique({
+      where: { id: (req.params.id as string) },
+      include: {
+        loan: { select: { loanNo: true, customer: { select: { name: true, customerId: true, phone: true, address: true } } } },
+      },
+    });
+    if (!payment) throw new AppError('Payment not found', 404);
+    res.json({ success: true, data: payment });
   } catch (error: any) { next(error); }
 });
 

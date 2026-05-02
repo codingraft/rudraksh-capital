@@ -33,20 +33,24 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
   try {
     const { username, password } = loginSchema.parse(req.body);
 
+    console.log(`Login attempt for username: "${username}"`);
     const user = await prisma.user.findUnique({
       where: { username },
       include: { branch: { select: { id: true, name: true, code: true } } },
     });
 
     if (!user) {
+      console.log(`User not found: "${username}"`);
       throw new AppError('Invalid username or password', 401);
     }
 
     if (user.isBlocked) {
+      console.log(`User is blocked: "${username}"`);
       throw new AppError('Your account has been blocked. Contact admin.', 403);
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
+    console.log(`Password match for "${username}": ${isMatch}`);
     if (!isMatch) {
       throw new AppError('Invalid username or password', 401);
     }
